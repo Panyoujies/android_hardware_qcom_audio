@@ -60,7 +60,7 @@ namespace android {
         run("AudioDaemon", PRIORITY_URGENT_AUDIO);
     }
 
-    void AudioDaemon::binderDied(const wp<IBinder>& who __unused)
+    void AudioDaemon::binderDied(const wp<IBinder>& who)
     {
         requestExit();
     }

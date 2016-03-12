@@ -48,7 +48,7 @@
 #define audio_is_offload_pcm(format) (0)
 #define OFFLOAD_USE_SMALL_BUFFER false
 #else
-#define OFFLOAD_USE_SMALL_BUFFER ((info->format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_PCM_OFFLOAD)
+#define OFFLOAD_USE_SMALL_BUFFER ((info->format & AUDIO_FORMAT_PCM_OFFLOAD) == AUDIO_FORMAT_PCM_OFFLOAD)
 #endif
 
 #ifndef AFE_PROXY_ENABLED
@@ -59,8 +59,13 @@
 #define AUDIO_OUTPUT_FLAG_INCALL_MUSIC 0x8000
 #endif
 
-#ifndef AUDIO_DEVICE_OUT_FM_TX
-#define AUDIO_DEVICE_OUT_FM_TX 0x8000000
+#ifndef FM_ENABLED
+#define AUDIO_DEVICE_OUT_FM 0x80000
+#define AUDIO_DEVICE_OUT_FM_TX 0x100000
+#define AUDIO_SOURCE_FM_RX 9
+#define AUDIO_SOURCE_FM_RX_A2DP 10
+#define AUDIO_DEVICE_IN_FM_RX (AUDIO_DEVICE_BIT_IN | 0x8000)
+#define AUDIO_DEVICE_IN_FM_RX_A2DP (AUDIO_DEVICE_BIT_IN | 0x10000)
 #endif
 
 #ifndef FLAC_OFFLOAD_ENABLED
@@ -90,8 +95,7 @@ int audio_extn_parse_compress_metadata(struct stream_out *out,
 #endif
 
 #ifdef AUDIO_EXTN_FORMATS_ENABLED
-#define AUDIO_OUTPUT_BIT_WIDTH ((config->offload_info.bit_width == 32) ? 24\
-                                   :config->offload_info.bit_width)
+#define AUDIO_OUTPUT_BIT_WIDTH (config->offload_info.bit_width)
 #else
 #define AUDIO_OUTPUT_BIT_WIDTH (CODEC_BACKEND_DEFAULT_BIT_WIDTH)
 #endif

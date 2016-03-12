@@ -46,7 +46,6 @@ typedef enum {
     BITWIDTH,
     PCM_ID,
     BACKEND_NAME,
-    DEVICE_NAME,
 } section_t;
 
 typedef void (* section_process_fn)(const XML_Char **attr);
@@ -55,7 +54,6 @@ static void process_acdb_id(const XML_Char **attr);
 static void process_bit_width(const XML_Char **attr);
 static void process_pcm_id(const XML_Char **attr);
 static void process_backend_name(const XML_Char **attr);
-static void process_device_name(const XML_Char **attr);
 static void process_root(const XML_Char **attr);
 
 static section_process_fn section_table[] = {
@@ -64,7 +62,6 @@ static section_process_fn section_table[] = {
     [BITWIDTH] = process_bit_width,
     [PCM_ID] = process_pcm_id,
     [BACKEND_NAME] = process_backend_name,
-    [DEVICE_NAME] = process_device_name,
 };
 
 static section_t section;
@@ -86,11 +83,6 @@ static section_t section;
  * ...
  * ...
  * </pcm_ids>
- * <device_names>
- * <device name="???" alias="???"/>
- * ...
- * ...
- * </device_names>
  * </audio_platform_info>
  */
 
@@ -245,38 +237,6 @@ done:
     return;
 }
 
-static void process_device_name(const XML_Char **attr)
-{
-    int index;
-
-    if (strcmp(attr[0], "name") != 0) {
-        ALOGE("%s: 'name' not found, no alias set!", __func__);
-        goto done;
-    }
-
-    index = platform_get_snd_device_index((char *)attr[1]);
-    if (index < 0) {
-        ALOGE("%s: Device %s in platform info xml not found, no alias set!",
-              __func__, attr[1]);
-        goto done;
-    }
-
-    if (strcmp(attr[2], "alias") != 0) {
-        ALOGE("%s: Device %s in platform info xml has no alias, no alias set!",
-              __func__, attr[1]);
-        goto done;
-    }
-
-    if (platform_set_snd_device_name(index, attr[3]) < 0) {
-        ALOGE("%s: Device %s, alias %s was not set!",
-              __func__, attr[1], attr[3]);
-        goto done;
-    }
-
-done:
-    return;
-}
-
 static void start_tag(void *userdata __unused, const XML_Char *tag_name,
                       const XML_Char **attr)
 {
@@ -292,12 +252,9 @@ static void start_tag(void *userdata __unused, const XML_Char *tag_name,
         section = PCM_ID;
     } else if (strcmp(tag_name, "backend_names") == 0) {
         section = BACKEND_NAME;
-    } else if (strcmp(tag_name, "device_names") == 0) {
-        section = DEVICE_NAME;
     } else if (strcmp(tag_name, "device") == 0) {
-        if ((section != ACDB) && (section != BACKEND_NAME)
-                 && (section != BITWIDTH) && (section != DEVICE_NAME)) {
-            ALOGE("device tag only supported for acdb/backend/device names");
+        if ((section != ACDB) && (section != BACKEND_NAME) && (section != BITWIDTH)) {
+            ALOGE("device tag only supported for acdb/backend names");
             return;
         }
 
@@ -326,8 +283,6 @@ static void end_tag(void *userdata __unused, const XML_Char *tag_name)
     } else if (strcmp(tag_name, "pcm_ids") == 0) {
         section = ROOT;
     } else if (strcmp(tag_name, "backend_names") == 0) {
-        section = ROOT;
-    } else if (strcmp(tag_name, "device_names") == 0) {
         section = ROOT;
     }
 }

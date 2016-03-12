@@ -21,7 +21,10 @@ endif
 ifneq ($(filter apq8084,$(TARGET_BOARD_PLATFORM)),)
   LOCAL_CFLAGS := -DPLATFORM_APQ8084
 endif
-ifneq ($(filter msm8992 msm8994,$(TARGET_BOARD_PLATFORM)),)
+ifneq ($(filter msm8994,$(TARGET_BOARD_PLATFORM)),)
+  LOCAL_CFLAGS := -DPLATFORM_MSM8994
+endif
+ifneq ($(filter msm8992,$(TARGET_BOARD_PLATFORM)),)
   LOCAL_CFLAGS := -DPLATFORM_MSM8994
 endif
 endif
@@ -54,7 +57,7 @@ ifeq ($(strip $(AUDIO_USE_LL_AS_PRIMARY_OUTPUT)),true)
     LOCAL_CFLAGS += -DUSE_LL_AS_PRIMARY_OUTPUT
 endif
 
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_PCM_OFFLOAD)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_PCM_OFFLOAD)),true)
     LOCAL_CFLAGS += -DPCM_OFFLOAD_ENABLED
 endif
 
@@ -62,11 +65,11 @@ ifeq ($(strip $(AUDIO_FEATURE_ENABLED_ANC_HEADSET)),true)
     LOCAL_CFLAGS += -DANC_HEADSET_ENABLED
 endif
 
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_FLUENCE)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_FLUENCE)),true)
     LOCAL_CFLAGS += -DFLUENCE_ENABLED
 endif
 
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_PROXY_DEVICE)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_PROXY_DEVICE)),true)
     LOCAL_CFLAGS += -DAFE_PROXY_ENABLED
 endif
 
@@ -74,8 +77,8 @@ ifeq ($(strip $(AUDIO_FEATURE_ENABLED_KPI_OPTIMIZE)),true)
     LOCAL_CFLAGS += -DKPI_OPTIMIZE_ENABLED
 endif
 
-ifeq ($(strip $(AUDIO_FEATURE_ENABLED_FM_POWER_OPT)),true)
-    LOCAL_CFLAGS += -DFM_POWER_OPT
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_FM)),true)
+    LOCAL_CFLAGS += -DFM_ENABLED
     LOCAL_SRC_FILES += audio_extn/fm.c
 endif
 
@@ -84,7 +87,7 @@ ifeq ($(strip $(AUDIO_FEATURE_ENABLED_USBAUDIO)),true)
     LOCAL_SRC_FILES += audio_extn/usb.c
 endif
 
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_HFP)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_HFP)),true)
     LOCAL_CFLAGS += -DHFP_ENABLED
     LOCAL_SRC_FILES += audio_extn/hfp.c
 endif
@@ -108,14 +111,14 @@ ifeq ($(strip $(AUDIO_FEATURE_ENABLED_MULTI_VOICE_SESSIONS)),true)
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_INCALL_MUSIC)),true)
     LOCAL_CFLAGS += -DINCALL_MUSIC_ENABLED
 endif
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_COMPRESS_VOIP)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_COMPRESS_VOIP)),true)
     LOCAL_CFLAGS += -DCOMPRESS_VOIP_ENABLED
     LOCAL_SRC_FILES += voice_extn/compress_voip.c
 endif
 
 endif
 
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_EXTN_FORMATS)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_EXTN_FORMATS)),true)
 LOCAL_CFLAGS += -DAUDIO_EXTN_FORMATS_ENABLED
 endif
 
@@ -129,10 +132,10 @@ ifdef MULTIPLE_HW_VARIANTS_ENABLED
   LOCAL_SRC_FILES += $(AUDIO_PLATFORM)/hw_info.c
 endif
 
-#ifeq ($(strip $(AUDIO_FEATURE_ENABLED_COMPRESS_CAPTURE)),true)
-#    LOCAL_CFLAGS += -DCOMPRESS_CAPTURE_ENABLED
-#    LOCAL_SRC_FILES += audio_extn/compress_capture.c
-#endif
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_COMPRESS_CAPTURE)),true)
+    LOCAL_CFLAGS += -DCOMPRESS_CAPTURE_ENABLED
+    LOCAL_SRC_FILES += audio_extn/compress_capture.c
+endif
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DTS_EAGLE)),true)
     LOCAL_CFLAGS += -DDTS_EAGLE
@@ -153,11 +156,6 @@ endif
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_MULTIPLE_TUNNEL)), true)
     LOCAL_CFLAGS += -DMULTIPLE_OFFLOAD_ENABLED
-endif
-
-ifeq ($(strip $(AUDIO_FEATURE_ENABLED_FLAC_OFFLOAD)),true)
-    LOCAL_CFLAGS += -DFLAC_OFFLOAD_ENABLED
-    LOCAL_CFLAGS += -DCOMPRESS_METADATA_NEEDED
 endif
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_EXTN_FLAC_DECODER)),true)
@@ -186,7 +184,7 @@ ifeq ($(strip $(AUDIO_FEATURE_ENABLED_APE_OFFLOAD)),true)
     LOCAL_CFLAGS += -DCOMPRESS_METADATA_NEEDED
 endif
 
-ifneq ($(strip $(AUDIO_FEATURE_ENABLED_PCM_OFFLOAD_24)),false)
+ifeq ($(strip $(AUDIO_FEATURE_ENABLED_PCM_OFFLOAD_24)),true)
        LOCAL_CFLAGS += -DPCM_OFFLOAD_ENABLED_24
 endif
 
@@ -220,7 +218,6 @@ endif
 LOCAL_SHARED_LIBRARIES := \
 	liblog \
 	libcutils \
-	libhardware \
 	libtinyalsa \
 	libtinycompress \
 	libaudioroute \
@@ -231,7 +228,6 @@ LOCAL_C_INCLUDES += \
 	external/tinyalsa/include \
 	external/tinycompress/include \
 	external/expat/lib \
-	hardware/libhardware/include \
 	$(call include-path-for, audio-route) \
 	$(call include-path-for, audio-effects) \
 	$(LOCAL_PATH)/$(AUDIO_PLATFORM) \

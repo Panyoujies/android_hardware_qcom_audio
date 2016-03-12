@@ -61,7 +61,10 @@
 #define COMPRESS_OFFLOAD_FRAGMENT_SIZE (32 * 1024)
 
 /* Used in calculating fragment size for pcm offload */
-#define PCM_OFFLOAD_BUFFER_DURATION 40 /* 40 millisecs */
+#define PCM_OFFLOAD_BUFFER_DURATION_FOR_AV 1000 /* 1 sec */
+#define PCM_OFFLOAD_BUFFER_DURATION_FOR_AV_STREAMING 80 /* 80 millisecs */
+#define PCM_OFFLOAD_BUFFER_DURATION_FOR_SMALL_BUFFERS 20 /* 20 millisecs */
+#define PCM_OFFLOAD_BUFFER_DURATION_MAX 1200  /* 1200 millisecs */
 
 /* MAX PCM fragment size cannot be increased  further due
  * to flinger's cblk size of 1mb,and it has to be a multiple of
@@ -180,7 +183,6 @@ struct platform_data {
     bool hd_voice;
     bool ec_ref_enabled;
     bool is_i2s_ext_modem;
-    bool camcorder_stereo;
     /* Audio calibration related functions */
     void                       *acdb_handle;
     int                        voice_feature_set;
@@ -204,10 +206,8 @@ static int pcm_device_table[AUDIO_USECASE_MAX][2] = {
                                             DEEP_BUFFER_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_LOW_LATENCY] = {LOWLATENCY_PCM_DEVICE,
                                            LOWLATENCY_PCM_DEVICE},
-    [USECASE_AUDIO_PLAYBACK_ULL]         = {MULTIMEDIA3_PCM_DEVICE,
-                                            MULTIMEDIA3_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_MULTI_CH] = {MULTIMEDIA2_PCM_DEVICE,
-                                         MULTIMEDIA2_PCM_DEVICE},
+                                        MULTIMEDIA2_PCM_DEVICE},
     [USECASE_AUDIO_PLAYBACK_OFFLOAD] =
                      {PLAYBACK_OFFLOAD_DEVICE, PLAYBACK_OFFLOAD_DEVICE},
 #ifdef MULTIPLE_OFFLOAD_ENABLED
@@ -276,7 +276,7 @@ static int pcm_device_table[AUDIO_USECASE_MAX][2] = {
 };
 
 /* Array to store sound devices */
-static char * device_table[SND_DEVICE_MAX] = {
+static const char * const device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_NONE] = "none",
     /* Playback sound devices */
     [SND_DEVICE_OUT_HANDSET] = "handset",
@@ -340,7 +340,6 @@ static char * device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_IN_BT_SCO_MIC_WB] = "bt-sco-mic-wb",
     [SND_DEVICE_IN_BT_SCO_MIC_WB_NREC] = "bt-sco-mic-wb",
     [SND_DEVICE_IN_CAMCORDER_MIC] = "camcorder-mic",
-    [SND_DEVICE_IN_CAMCORDER_STEREO_DMIC] = "camcorder-stereo-dmic",
     [SND_DEVICE_IN_VOICE_DMIC] = "voice-dmic-ef",
     [SND_DEVICE_IN_VOICE_SPEAKER_DMIC] = "voice-speaker-dmic-ef",
     [SND_DEVICE_IN_VOICE_SPEAKER_QMIC] = "voice-speaker-qmic",
@@ -438,7 +437,6 @@ static int acdb_device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_IN_BT_SCO_MIC_WB] = 38,
     [SND_DEVICE_IN_BT_SCO_MIC_WB_NREC] = 123,
     [SND_DEVICE_IN_CAMCORDER_MIC] = 4,
-    [SND_DEVICE_IN_CAMCORDER_STEREO_DMIC] = 131,
     [SND_DEVICE_IN_VOICE_DMIC] = 41,
     [SND_DEVICE_IN_VOICE_SPEAKER_DMIC] = 43,
     [SND_DEVICE_IN_VOICE_SPEAKER_QMIC] = 19,
@@ -537,7 +535,6 @@ static struct name_to_index snd_device_name_index[SND_DEVICE_MAX] = {
     {TO_NAME_INDEX(SND_DEVICE_IN_BT_SCO_MIC_WB)},
     {TO_NAME_INDEX(SND_DEVICE_IN_BT_SCO_MIC_WB_NREC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_CAMCORDER_MIC)},
-    {TO_NAME_INDEX(SND_DEVICE_IN_CAMCORDER_STEREO_DMIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_DMIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_SPEAKER_DMIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_VOICE_SPEAKER_QMIC)},
@@ -571,7 +568,6 @@ static char * backend_table[SND_DEVICE_MAX] = {0};
 static struct name_to_index usecase_name_index[AUDIO_USECASE_MAX] = {
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_DEEP_BUFFER)},
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_LOW_LATENCY)},
-    {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_ULL)},
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_MULTI_CH)},
     {TO_NAME_INDEX(USECASE_AUDIO_PLAYBACK_OFFLOAD)},
 #ifdef MULTIPLE_OFFLOAD_ENABLED
@@ -1079,7 +1075,6 @@ void *platform_init(struct audio_device *adev)
     my_data->slowtalk = false;
     my_data->hd_voice = false;
     my_data->edid_info = NULL;
-    my_data->camcorder_stereo = false;
 
     property_get("ro.qc.sdk.audio.fluencetype", my_data->fluence_cap, "");
     if (!strncmp("fluencepro", my_data->fluence_cap, sizeof("fluencepro"))) {
@@ -1088,11 +1083,6 @@ void *platform_init(struct audio_device *adev)
         my_data->fluence_type = FLUENCE_DUAL_MIC;
     } else {
         my_data->fluence_type = FLUENCE_NONE;
-    }
-
-    property_get("persist.audio.camcorder.stereo", value, "false");
-    if (!strncmp("true", value, sizeof("true"))) {
-        my_data->camcorder_stereo = true;
     }
 
     if (my_data->fluence_type != FLUENCE_NONE) {
@@ -1804,9 +1794,7 @@ snd_device_t platform_get_output_snd_device(void *platform, audio_devices_t devi
         } else if (devices == (AUDIO_DEVICE_OUT_AUX_DIGITAL |
                                AUDIO_DEVICE_OUT_SPEAKER)) {
             snd_device = SND_DEVICE_OUT_SPEAKER_AND_HDMI;
-        } else if ((devices == (AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
-                               AUDIO_DEVICE_OUT_SPEAKER)) ||
-                    devices == (AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET |
+        } else if (devices == (AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET |
                                AUDIO_DEVICE_OUT_SPEAKER)) {
             snd_device = SND_DEVICE_OUT_SPEAKER_AND_USB_HEADSET;
         } else {
@@ -1991,8 +1979,6 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
                 snd_device = SND_DEVICE_IN_HANDSET_MIC;
                 if (audio_extn_hfp_is_active(adev))
                     platform_set_echo_reference(adev->platform, true);
-            } else if (out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE) {
-                snd_device = SND_DEVICE_IN_HANDSET_MIC;
             } else {
                 snd_device = SND_DEVICE_IN_VOICE_DMIC;
             }
@@ -2034,10 +2020,7 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
     } else if (source == AUDIO_SOURCE_CAMCORDER) {
         if (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC ||
             in_device & AUDIO_DEVICE_IN_BACK_MIC) {
-            if (my_data->camcorder_stereo)
-                snd_device = SND_DEVICE_IN_CAMCORDER_STEREO_DMIC;
-            else
-                snd_device = SND_DEVICE_IN_CAMCORDER_MIC;
+            snd_device = SND_DEVICE_IN_CAMCORDER_MIC;
         }
     } else if (source == AUDIO_SOURCE_VOICE_RECOGNITION) {
         if (in_device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
@@ -2144,7 +2127,9 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
                 }
             }
         }
-    } else if (source == AUDIO_SOURCE_FM_TUNER) {
+    } else if (source == AUDIO_SOURCE_FM_RX ||
+               source == AUDIO_SOURCE_FM_RX_A2DP||
+               source == AUDIO_SOURCE_FM_TUNER) {
         snd_device = SND_DEVICE_IN_CAPTURE_FM;
     } else if (source == AUDIO_SOURCE_DEFAULT) {
         goto exit;
@@ -2201,7 +2186,8 @@ snd_device_t platform_get_input_snd_device(void *platform, audio_devices_t out_d
         } else if (in_device & AUDIO_DEVICE_IN_ANLG_DOCK_HEADSET ||
                    in_device & AUDIO_DEVICE_IN_DGTL_DOCK_HEADSET) {
             snd_device = SND_DEVICE_IN_USB_HEADSET_MIC;
-        } else if (in_device & AUDIO_DEVICE_IN_FM_TUNER) {
+        } else if (in_device & AUDIO_DEVICE_IN_FM_RX ||
+                   in_device & AUDIO_DEVICE_IN_FM_TUNER) {
             snd_device = SND_DEVICE_IN_CAPTURE_FM;
         } else {
             ALOGE("%s: Unknown input device(s) %#x", __func__, in_device);
@@ -2870,18 +2856,10 @@ int64_t platform_render_latency(audio_usecase_t usecase)
 int platform_update_usecase_from_source(int source, int usecase)
 {
     ALOGV("%s: input source :%d", __func__, source);
-    switch(source) {
-		case AUDIO_SOURCE_FM_TUNER:
-			return USECASE_AUDIO_RECORD_FM_VIRTUAL;
-        case AUDIO_SOURCE_VOICE_UPLINK:
-            return USECASE_INCALL_REC_UPLINK;
-        case AUDIO_SOURCE_VOICE_DOWNLINK:
-            return USECASE_INCALL_REC_DOWNLINK;
-        case AUDIO_SOURCE_VOICE_CALL:
-            return USECASE_INCALL_REC_UPLINK_AND_DOWNLINK;
-        default:
-            return usecase;
-    }
+    if (source == AUDIO_SOURCE_FM_RX_A2DP ||
+        source == AUDIO_SOURCE_FM_TUNER)
+        usecase = USECASE_AUDIO_RECORD_FM_VIRTUAL;
+    return usecase;
 }
 
 bool platform_listen_device_needs_event(snd_device_t snd_device)
@@ -2961,13 +2939,25 @@ uint32_t platform_get_pcm_offload_buffer_size(audio_offload_info_t* info)
 {
     uint32_t fragment_size = 0;
     uint32_t bits_per_sample = 16;
-    uint32_t pcm_offload_time = PCM_OFFLOAD_BUFFER_DURATION;
+    uint32_t pcm_offload_time = PCM_OFFLOAD_BUFFER_DURATION_FOR_SMALL_BUFFERS;
 
     if (info->format == AUDIO_FORMAT_PCM_24_BIT_OFFLOAD) {
         bits_per_sample = 32;
     }
 
-    //duration is set to 40 ms worth of stereo data at 48Khz
+    if (platform_use_small_buffer(info)) {
+        pcm_offload_time = PCM_OFFLOAD_BUFFER_DURATION_FOR_SMALL_BUFFERS;
+    } else {
+        if (!info->has_video) {
+            pcm_offload_time = PCM_OFFLOAD_BUFFER_DURATION_MAX;
+        } else if (info->has_video && info->is_streaming) {
+            pcm_offload_time = PCM_OFFLOAD_BUFFER_DURATION_FOR_AV_STREAMING;
+        } else if (info->has_video) {
+            pcm_offload_time = PCM_OFFLOAD_BUFFER_DURATION_FOR_AV;
+        }
+    }
+
+    //duration is set to 20 ms worth of stereo data at 48Khz
     //with 16 bit per sample, modify this when the channel
     //configuration is different
     fragment_size = (pcm_offload_time
@@ -3699,20 +3689,5 @@ int platform_set_device_params(struct stream_out *out, int param, int value)
     mixer_ctl_set_array(ctl, set_values, ARRAY_SIZE(set_values));
 
 end:
-    return ret;
-}
-
-int platform_set_snd_device_name(snd_device_t device, const char *name)
-{
-    int ret = 0;
-
-    if ((device < SND_DEVICE_MIN) || (device >= SND_DEVICE_MAX)) {
-        ALOGE("%s:: Invalid snd_device = %d", __func__, device);
-        ret = -EINVAL;
-        goto done;
-    }
-
-    device_table[device] = strdup(name);
-done:
     return ret;
 }
